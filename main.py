@@ -16,7 +16,7 @@ st.set_page_config(
 )
 
 # ===============================
-# 한글 폰트 (깨짐 방지)
+# 한글 폰트
 # ===============================
 st.markdown("""
 <style>
@@ -28,7 +28,7 @@ html, body, [class*="css"] {
 """, unsafe_allow_html=True)
 
 # ===============================
-# 상수 정의
+# 상수
 # ===============================
 SCHOOL_EC = {
     "송도고": 1.0,
@@ -40,7 +40,7 @@ SCHOOL_EC = {
 DATA_DIR = Path("data")
 
 # ===============================
-# 유틸: 한글 파일명 NFC/NFD 대응
+# 파일명 정규화
 # ===============================
 def normalize(text: str) -> str:
     return unicodedata.normalize("NFC", text)
@@ -83,7 +83,7 @@ def load_growth_data():
         xls = pd.ExcelFile(xlsx_file)
         data = {}
         for sheet in xls.sheet_names:
-            data[sheet] = pd.read_excel(xls, sheet_name=sheet)
+            data[sheet] = pd.read_excel(xlsx_file, sheet_name=sheet)
         return data
 
 env_data = load_environment_data()
@@ -104,7 +104,7 @@ selected_school = st.sidebar.selectbox(
 st.title("🌱 극지식물 EC–환경–생육 통합 분석")
 
 # ===============================
-# 탭 구성 (요구사항 그대로)
+# 탭
 # ===============================
 tab1, tab2, tab3 = st.tabs([
     "📈 송도고 환경 변화",
@@ -112,9 +112,9 @@ tab1, tab2, tab3 = st.tabs([
     "📊 예상 생중량 계산"
 ])
 
-# ======================================================
-# TAB 1 — 송도고 환경 시계열
-# ======================================================
+# ===============================
+# TAB 1
+# ===============================
 with tab1:
     st.subheader("송도고 온도 · 습도 · pH · EC 변화")
 
@@ -128,10 +128,10 @@ with tab1:
             subplot_titles=["온도", "습도", "pH", "EC"]
         )
 
-        fig.add_trace(go.Scatter(x=df["time"], y=df["temperature"], name="온도"), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df["time"], y=df["humidity"], name="습도"), row=1, col=2)
-        fig.add_trace(go.Scatter(x=df["time"], y=df["ph"], name="pH"), row=2, col=1)
-        fig.add_trace(go.Scatter(x=df["time"], y=df["ec"], name="EC"), row=2, col=2)
+        fig.add_trace(go.Scatter(x=df["time"], y=df["temperature"]), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df["time"], y=df["humidity"]), row=1, col=2)
+        fig.add_trace(go.Scatter(x=df["time"], y=df["ph"]), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df["time"], y=df["ec"]), row=2, col=2)
 
         fig.update_layout(
             height=700,
@@ -141,9 +141,9 @@ with tab1:
 
         st.plotly_chart(fig, use_container_width=True)
 
-# ======================================================
-# TAB 2 — EC–pH 상관관계
-# ======================================================
+# ===============================
+# TAB 2
+# ===============================
 with tab2:
     st.subheader("EC와 pH의 상관관계 (송도고 기준)")
 
@@ -159,11 +159,7 @@ with tab2:
 
         fig = go.Figure()
         fig.add_trace(go.Scatter(
-            x=x,
-            y=y,
-            mode="markers",
-            marker=dict(size=7),
-            name="측정값"
+            x=x, y=y, mode="markers", marker=dict(size=7)
         ))
 
         fig.update_layout(
@@ -175,18 +171,11 @@ with tab2:
 
         st.plotly_chart(fig, use_container_width=True)
 
-        st.markdown("""
-📌 **해석**
-
-- EC 증가에 따라 pH가 감소하는 **강한 음의 상관관계**가 관찰된다.
-- 이는 양액 내 이온 축적 과정에서 H⁺ 농도가 증가했을 가능성을 시사한다.
-""")
-
-# ======================================================
-# TAB 3 — 예상 생중량 계산
-# ======================================================
+# ===============================
+# TAB 3
+# ===============================
 with tab3:
-    st.subheader("EC 조건에 따른 예상 생중량 계산")
+    st.subheader("EC 조건에 따른 예상 생중량")
 
     summary = []
     for school, df in growth_data.items():
@@ -215,23 +204,22 @@ with tab3:
 
     st.plotly_chart(fig, use_container_width=True)
 
-    optimal_row = result_df.loc[result_df["평균 생중량"].idxmax()]
+    optimal = result_df.loc[result_df["평균 생중량"].idxmax()]
 
     st.markdown(f"""
 ### 📌 계산 결과
-
-- 평균 생중량 기준 최적 EC는 **EC = {optimal_row['EC']}** 이다.
-- 본 값은 실험 데이터 기반 **경향성 결과**이며,
-  다른 환경 요인(광주기 등)에 따라 달라질 수 있다.
+- 평균 생중량 기준 최적 EC는 **EC = {optimal['EC']}**  
+- 본 값은 실험 데이터를 이용한 **경향성 결과**이다.
 """)
 
-    # XLSX 다운로드
+    # ✅ 다운로드 (완전 안정)
     buffer = io.BytesIO()
     result_df.to_excel(buffer, index=False, engine="openpyxl")
     buffer.seek(0)
 
     st.download_button(
-        data=buffer,
+        label="EC별 평균 생중량 결과 다운로드",
+        data=buffer.getvalue(),   # 🔥 핵심 수정
         file_name="EC별_평균생중량_결과.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )

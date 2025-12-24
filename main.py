@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from plotly.subplots import make_subplots
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from pathlib import Path
 import unicodedata
 import io
@@ -16,7 +16,7 @@ st.set_page_config(
 )
 
 # ======================================================
-# 폰트 + 다크/라이트 UI 대응
+# 한글 폰트 + 다크/라이트 모드 대응 CSS
 # ======================================================
 st.markdown("""
 <style>
@@ -63,25 +63,31 @@ html, body, [class*="css"] {
 """, unsafe_allow_html=True)
 
 # ======================================================
-# 경로 및 파일 탐색 (NFC/NFD 안전)
+# 경로 설정
 # ======================================================
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 
-def normalize(text):
+# ======================================================
+# NFC/NFD 안전 파일 탐색
+# ======================================================
+def normalize(text: str) -> str:
     return unicodedata.normalize("NFC", text)
 
-def find_file(keyword):
-    for f in DATA_DIR.iterdir():
-        if normalize(keyword) in normalize(f.name):
-            return f
+def find_file(keyword: str):
+    if not DATA_DIR.exists():
+        return None
+
+    for file in DATA_DIR.iterdir():
+        if normalize(keyword) in normalize(file.name):
+            return file
     return None
 
 # ======================================================
 # 데이터 로딩
 # ======================================================
 @st.cache_data
-def load_env_data(school):
+def load_env_data(school: str):
     file = find_file(f"{school}_환경데이터")
     if file is None:
         return None
@@ -97,10 +103,10 @@ def load_growth_data():
 # ======================================================
 # 사이드바
 # ======================================================
-st.sidebar.title("학교 선택")
+st.sidebar.title("분석 설정")
 school_option = st.sidebar.selectbox(
-    "분석 대상",
-    ["전체", "송도고", "하늘고", "아라고", "동산고"]
+    "학교 선택",
+    ["송도고", "하늘고", "아라고", "동산고"]
 )
 
 # ======================================================
@@ -112,7 +118,7 @@ st.markdown("""
 <div class="section">
 본 대시보드는 극지식물 <b>나도수영</b>의 생육에 영향을 미치는  
 <b>EC(전기전도도), pH, 환경 요인, 광주기</b>를 통합적으로 분석한다.  
-특히 pH–EC의 상대 변화와 생육 지표 간의 관계를 중심으로 해석한다.
+특히 EC–pH의 상관관계와 EC 조건에 따른 생육 차이를 중심으로 해석한다.
 </div>
 """, unsafe_allow_html=True)
 
@@ -120,74 +126,75 @@ st.markdown("""
 # 탭 구성
 # ======================================================
 tab1, tab2, tab3, tab4 = st.tabs([
-    "📈 송도고 환경 변화",
+    "📈 환경 변화 (송도고)",
     "🔗 EC–pH 상관 분석",
-    "⚖️ EC–생육 결과",
-    "💡 광주기 가설 분석"
+    "⚖️ EC–생육 결과 비교",
+    "💡 광주기 가설"
 ])
 
 # ======================================================
 # TAB 1: 송도고 환경 변화
 # ======================================================
 with tab1:
-    df = load_env_data("송도고")
+    df_env = load_env_data("송도고")
 
-    if df is None:
-        st.error("송도고 환경 데이터가 없습니다.")
+    if df_env is None:
+        st.error("송도고 환경 데이터를 찾을 수 없습니다.")
     else:
         st.markdown("""
         <div class="section">
-        송도고의 온도·습도·EC·pH는 시간에 따라 연속적으로 측정되었다.  
-        각 변수의 동시 변화를 통해 재배 환경의 안정성과 변동성을 해석할 수 있다.
+        송도고의 온도, 습도, EC, pH는 시간에 따라 연속적으로 측정되었다.  
+        이를 통해 환경 변수 간 동시 변화 양상을 관찰할 수 있다.
         </div>
         """, unsafe_allow_html=True)
 
         fig = make_subplots(
-            rows=2, cols=2,
+            rows=2,
+            cols=2,
             subplot_titles=["온도", "습도", "EC", "pH"]
         )
 
-        fig.add_trace(go.Scatter(x=df["time"], y=df["temperature"]), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df["time"], y=df["humidity"]), row=1, col=2)
-        fig.add_trace(go.Scatter(x=df["time"], y=df["ec"]), row=2, col=1)
-        fig.add_trace(go.Scatter(x=df["time"], y=df["ph"]), row=2, col=2)
+        fig.add_trace(go.Scatter(x=df_env["time"], y=df_env["temperature"]), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df_env["time"], y=df_env["humidity"]), row=1, col=2)
+        fig.add_trace(go.Scatter(x=df_env["time"], y=df_env["ec"]), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df_env["time"], y=df_env["ph"]), row=2, col=2)
 
         fig.update_layout(height=600, showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
 
 # ======================================================
-# TAB 2: EC–pH 상관 분석 (statsmodels 미사용)
+# TAB 2: EC–pH 상관 분석
 # ======================================================
 with tab2:
-    if df is None:
+    if df_env is None:
         st.error("환경 데이터가 없습니다.")
     else:
-        corr = df["ec"].corr(df["ph"])
+        corr = df_env["ec"].corr(df_env["ph"])
 
         st.markdown(f"""
         <div class="section">
         EC와 pH 사이의 피어슨 상관계수는  
         <b>r = {corr:.3f}</b>로 계산되었다.  
-        이는 EC 증가에 따라 pH가 감소하는 <b>뚜렷한 음의 상관관계</b>를 의미한다.
+        이는 EC가 증가할수록 pH가 감소하는 음의 상관관계를 의미한다.
         </div>
         """, unsafe_allow_html=True)
 
         fig_scatter = px.scatter(
-            df,
+            df_env,
             x="ec",
             y="ph",
-            title="EC–pH 산점도 (상관관계 시각화)"
+            title="EC–pH 산점도"
         )
         st.plotly_chart(fig_scatter, use_container_width=True)
 
 # ======================================================
-# TAB 3: EC–생육 결과
+# TAB 3: EC–생육 결과 비교
 # ======================================================
 with tab3:
-    growth = load_growth_data()
+    growth_data = load_growth_data()
 
-    if growth is None:
-        st.error("생육 결과 데이터가 없습니다.")
+    if growth_data is None:
+        st.error("생육 결과 데이터를 찾을 수 없습니다.")
     else:
         ec_map = {
             "송도고": 1.0,
@@ -197,10 +204,13 @@ with tab3:
         }
 
         rows = []
-        for school, gdf in growth.items():
+        for school, gdf in growth_data.items():
+            if "생중량(g)" not in gdf.columns:
+                continue
+
             rows.append({
                 "학교": school,
-                "EC": ec_map.get(school),
+                "EC": ec_map.get(school, None),
                 "평균 생중량(g)": gdf["생중량(g)"].mean()
             })
 
@@ -208,8 +218,8 @@ with tab3:
 
         st.markdown("""
         <div class="section">
-        EC가 일정 수준까지 증가하면 생육이 촉진되지만,  
-        고농도 EC 조건에서는 삼투 스트레스로 인해 생중량이 감소하는 경향이 나타난다.
+        EC가 증가함에 따라 생육이 촉진되다가,  
+        고농도 EC 조건에서는 삼투 스트레스로 인해 생중량이 감소하는 경향을 보인다.
         </div>
         """, unsafe_allow_html=True)
 
@@ -222,34 +232,35 @@ with tab3:
         )
         st.plotly_chart(fig_bar, use_container_width=True)
 
-        # 다운로드 (중요: getvalue 사용)
+        # 다운로드 (완전 안전)
         buffer = io.BytesIO()
         result_df.to_excel(buffer, index=False, engine="openpyxl")
         buffer.seek(0)
 
         st.download_button(
+            label="📥 EC별 평균 생중량 결과 다운로드",
             data=buffer.getvalue(),
             file_name="EC별_평균생중량_결과.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
 # ======================================================
-# TAB 4: 광주기 가설 분석
+# TAB 4: 광주기 가설
 # ======================================================
 with tab4:
     st.markdown("""
     <div class="section">
-    광주기는 식물의 생체 리듬과 광합성 효율을 조절하는 핵심 요인이다.  
-    극지식물은 장일 조건에 적응했을 가능성이 높아,  
-    동일한 EC 조건에서도 광주기 변화가 생육 차이를 유발할 수 있다.
+    광주기는 식물의 광합성 효율과 생체 리듬을 조절하는 핵심 변수이다.  
+    극지식물은 장일 환경에 적응했을 가능성이 높으며,  
+    동일한 EC 조건에서도 광주기 차이가 생육 결과에 영향을 줄 수 있다.
     </div>
     """, unsafe_allow_html=True)
 
     st.markdown("""
     <div class="highlight">
-    🔬 후속 실험 설계 제안  
-    - EC 조건 고정  
-    - 광주기 8h / 12h / 16h  
-    - 생중량·잎 수·생장률 비교 분석
+    🔬 후속 실험 제안  
+    • EC 조건 고정  
+    • 광주기 8h / 12h / 16h 비교  
+    • 생중량·잎 수·생장률 동시 분석
     </div>
     """, unsafe_allow_html=True)
